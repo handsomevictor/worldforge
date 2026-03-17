@@ -48,9 +48,24 @@ class CalendarClock(Clock):
     Advances by a fixed timedelta step on each tick.
     Simulation ends when `now >= end`.
 
+    Parameters
+    ----------
+    start:    ISO date string or datetime.
+    end:      ISO date string or datetime.
+    step:     Duration string like '1 day', '1 hour', or a timedelta.
+    timezone: Timezone label (informational; stored but not enforced).
+    realtime: If True, sleep for the real-world equivalent of `step` between
+              ticks. Useful for digital-twin / live-monitoring scenarios.
+
     Example::
 
         clock = CalendarClock(start="2024-01-01", end="2025-01-01", step="1 day")
+
+        # Digital-twin: tick every real second (step = 1 minute compressed to 1 s)
+        clock = CalendarClock(
+            start="2024-01-01", end="2024-01-02",
+            step="1 minute", realtime=True,
+        )
     """
 
     def __init__(
@@ -59,12 +74,16 @@ class CalendarClock(Clock):
         end: Union[str, datetime],
         step: Union[str, timedelta],
         timezone: str = "UTC",
+        realtime: bool = False,
+        realtime_factor: float = 1.0,
     ) -> None:
         self._start = _parse_dt(start)
         self._end = _parse_dt(end)
         self._step = parse_duration(step)
         self._current = self._start
         self._timezone = timezone
+        self._realtime = realtime
+        self._realtime_factor = realtime_factor   # wall-seconds per sim-step
 
         if self._start >= self._end:
             raise ConfigurationError(
@@ -72,6 +91,9 @@ class CalendarClock(Clock):
             )
 
     def tick(self) -> None:
+        if self._realtime:
+            import time as _time
+            _time.sleep(self._realtime_factor)
         self._current += self._step
 
     @property

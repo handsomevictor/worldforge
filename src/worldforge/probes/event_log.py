@@ -7,8 +7,12 @@ from worldforge.probes.base import Probe
 
 
 def _event_to_dict(event: Any) -> dict:
-    """Convert an event object to a plain dict, skipping private attributes."""
-    result = {}
+    """Convert an event object to a plain dict, skipping private attributes.
+
+    Always includes ``event_type`` (class name) so downstream consumers can
+    distinguish event kinds without importing scenario-specific classes.
+    """
+    result = {"event_type": type(event).__name__}
     for key, val in vars(event).items():
         if not key.startswith("_"):
             result[key] = val

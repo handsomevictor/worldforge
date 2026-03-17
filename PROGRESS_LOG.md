@@ -52,38 +52,38 @@
 
 | 步骤 | 描述 | 状态 | 完成日期 | 备注 |
 |------|------|------|----------|------|
-| 19 | environments/network.py（NetworkX 集成） | [ ] | | |
-| 20 | environments/grid.py + environments/continuous.py | [ ] | | |
-| 21 | environments/market.py（订单簿） | [ ] | | |
+| 19 | environments/network.py（NetworkX 集成） | [x] | 2026-03-17 | NetworkEnvironment：scale_free, small_world, erdos_renyi, neighbors, agents_within_hops |
+| 20 | environments/grid.py + environments/continuous.py | [x] | 2026-03-17 | GridEnvironment（bounded/torus, moore/von_neumann）+ ContinuousSpace |
+| 21 | environments/market.py（订单簿） | [x] | 2026-03-17 | MarketEnvironment + OrderBook：bid/ask 撮合，Trade 记录 |
 
 ## 第七阶段：高级行为与并行
 
 | 步骤 | 描述 | 状态 | 完成日期 | 备注 |
 |------|------|------|----------|------|
-| 22 | behaviors/decision.py + behaviors/social.py + behaviors/memory.py | [ ] | | |
-| 23 | runner/parallel.py + runner/batch.py | [ ] | | |
+| 22 | behaviors/decision.py + behaviors/social.py + behaviors/memory.py | [x] | 2026-03-17 | DecisionBehavior + SocialBehavior + ContagionBehavior + MemoryBehavior |
+| 23 | runner/parallel.py + runner/batch.py | [x] | 2026-03-17 | ParallelRunner（进程池）+ BatchRunner（参数扫描 Monte Carlo）+ BatchResult |
 
 ## 第八阶段：扩展输出
 
 | 步骤 | 描述 | 状态 | 完成日期 | 备注 |
 |------|------|------|----------|------|
-| 24 | output/polars_out.py + output/sql_out.py + output/streaming_out.py | [ ] | | |
+| 24 | output/polars_out.py + output/sql_out.py + output/streaming_out.py | [x] | 2026-03-17 | to_polars + to_sql + StreamingParquetWriter + StreamingJSONLWriter |
 
 ## 第九阶段：场景
 
 | 步骤 | 描述 | 状态 | 完成日期 | 备注 |
 |------|------|------|----------|------|
-| 25 | scenarios/ecommerce.py | [ ] | | |
-| 26 | scenarios/epidemic.py + scenarios/fintech.py | [ ] | | |
-| 27 | scenarios/market_microstructure.py + scenarios/iot_timeseries.py + scenarios/saas.py | [ ] | | |
+| 25 | scenarios/ecommerce.py | [x] | 2026-03-17 | ecommerce_world：EcommerceUser + Purchase/Churn 事件 |
+| 26 | scenarios/epidemic.py + scenarios/fintech.py | [x] | 2026-03-17 | epidemic_world（SIR 传播）+ fintech_world（贷款/存款） |
+| 27 | scenarios/market_microstructure.py + scenarios/iot_timeseries.py + scenarios/saas.py | [x] | 2026-03-17 | + supply_chain_world + social_network_world，13 个场景集成测试全通过 |
 
 ## 第十阶段：接口与完善
 
 | 步骤 | 描述 | 状态 | 完成日期 | 备注 |
 |------|------|------|----------|------|
-| 28 | rl/ Gymnasium 接口 | [ ] | | |
-| 29 | cli.py | [ ] | | |
-| 30 | benchmarks/ + 全量测试 + README 完善 | [ ] | | |
+| 28 | rl/ Gymnasium 接口 | [ ] | | 暂缓，gymnasium 不在强依赖中 |
+| 29 | cli.py | [x] | 2026-03-17 | `worldforge run/list/info` 三个子命令 |
+| 30 | benchmarks/ + 全量测试 + README 完善 | [x] | 2026-03-17 | 162/162 测试通过；1k×1k = 65ms（目标 <1s）✅ |
 
 ---
 
@@ -93,10 +93,10 @@
 |--------|--------------|---------|
 | 全部分布通过测试 | Step 06 | 2026-03-17 ✅ |
 | 首个可运行仿真 | Step 18 | 2026-03-17 ✅ |
-| 完整环境套件 | Step 21 | |
-| 并行批量运行器 | Step 23 | |
-| 全部场景可运行 | Step 27 | |
-| v0.1.0 发布就绪 | Step 30 | |
+| 完整环境套件 | Step 21 | 2026-03-17 ✅ |
+| 并行批量运行器 | Step 23 | 2026-03-17 ✅ |
+| 全部场景可运行 | Step 27 | 2026-03-17 ✅ |
+| v0.1.0 发布就绪 | Step 30 | 2026-03-17 ✅ |
 
 ---
 
@@ -114,4 +114,4 @@
 | probes | ✅（EventLog, Snapshot, Aggregator, TimeSeries, Custom） | | |
 | output | ✅（SimulationResult） | | |
 | runner | | ✅ 14（integration） | |
-| scenarios | | | |
+| scenarios | | ✅ 13（integration） | |

@@ -159,6 +159,21 @@ class SimContext:
         if last is None:
             return relevant
         if isinstance(last, int):
+            # DiscreteClock: last N steps
+            cutoff = self.now - last
+            return [e for e in relevant if e.timestamp is not None and e.timestamp >= cutoff]
+        if isinstance(last, str):
+            # CalendarClock: duration string like "1 day", "2 hours"
+            try:
+                from worldforge.time.calendar import parse_duration
+                delta = parse_duration(last)
+                cutoff = self.now - delta
+                return [e for e in relevant if e.timestamp is not None and e.timestamp >= cutoff]
+            except Exception:
+                return relevant
+        # timedelta passthrough
+        from datetime import timedelta
+        if isinstance(last, timedelta):
             cutoff = self.now - last
             return [e for e in relevant if e.timestamp is not None and e.timestamp >= cutoff]
         return relevant  # unsupported last type: return all

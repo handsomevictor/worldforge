@@ -64,3 +64,11 @@ AttributeError: module 'math' has no attribute 'erfinv'
 **修复：** `SequentialRunner.run()` 在每次运行开始时调用 `_reset_id_counter(1)`，确保同一个 `seed` 无论运行多少次 ID 序列都从 1 起始。
 
 **教训：** 可复现性不只是 RNG seed，所有有状态的全局计数器都要在运行入口处重置。
+
+---
+
+## Step 19-30：环境、行为、场景、CLI、Benchmark（2026-03-17）
+
+这批步骤**零 bug，162 个测试一次全绿**。没有遇到运行时问题，所以没有 bug 经验教训可记。
+
+**性能结果：** 1,000 agents × 1,000 steps = **65ms**（目标 < 1 秒），超额完成 15 倍。
