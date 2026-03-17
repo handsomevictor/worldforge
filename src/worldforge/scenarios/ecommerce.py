@@ -84,6 +84,9 @@ class EcommerceUser(Agent):
             ctx.emit(ChurnEvent(user_id=self.id, tenure_days=self.age_days))
             ctx.remove_agent(self)
 
+    def on_born(self, ctx: Any) -> None:
+        ctx.emit(UserSignupEvent(user_id=self.id, tier=self.tier))
+
     def _update_churn_risk(self) -> None:
         base = 0.001
         if self.tier == "free" and self.age_days > 30:
@@ -143,8 +146,10 @@ def ecommerce_world(
     sim.add_probe(AggregatorProbe(
         metrics={
             "dau": lambda ctx: ctx.agent_count(EcommerceUser),
-            "gmv_daily": lambda ctx: ctx.event_sum(PurchaseEvent, "amount"),
-            "churned": lambda ctx: ctx.event_count(ChurnEvent),
+            # last="1 day" scopes to the current day only — not cumulative since start
+            "gmv_daily": lambda ctx: ctx.event_sum(PurchaseEvent, "amount", last="1 day"),
+            "churned_daily": lambda ctx: ctx.event_count(ChurnEvent, last="1 day"),
+            "gmv_cumulative": lambda ctx: ctx.event_sum(PurchaseEvent, "amount"),
         },
         every="1 day",
         name="daily_metrics",

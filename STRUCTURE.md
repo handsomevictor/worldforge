@@ -61,8 +61,9 @@ worldforge/
 - `ctx.agent_mean(AgentType, field)` → float
 - `ctx.remove_agent(agent)`
 - `ctx.spawn(AgentType, count, **kwargs)`
-- `ctx.event_sum(EventType, field, last=None)` → float
-- `ctx.event_count(EventType, last=None)` → int
+- `ctx.event_sum(EventType, field, last=None)` → float（`last` 支持字符串如 `"1 day"`）
+- `ctx.event_count(EventType, last=None)` → int（`last` 支持字符串如 `"1 day"`）
+- `ctx.environment` — 当前仿真环境（由 runner 自动注入）
 
 #### `exceptions.py` ✅
 异常层次：
@@ -100,6 +101,7 @@ sim = Simulation(name, seed, clock)
 sim.add_agents(AgentType, count, factory=None)
 sim.add_probe(probe)
 sim.add_shock(shock)
+sim.set_environment(env)       # 绑定环境，runner 自动注入到 ctx.environment
 sim.on(EventType)(handler)
 sim.global_rule(every=...)(fn)
 result = sim.run(progress=False)
@@ -117,6 +119,9 @@ Simulation.from_checkpoint(path)
 #### `calendar.py` — `CalendarClock`
 真实日历时间，支持时区。
 - `start`、`end`、`step`（timedelta 或字符串如 `"1 day"`）
+- `timezone`（默认 `"UTC"`）
+- `realtime=False`：设为 `True` 时以真实挂钟速度推进（数字孪生/实时监控）
+- `realtime_factor=1.0`：实时倍速（`2.0` = 2 倍速，`0.5` = 半速）
 
 #### `event_driven.py` — `EventDrivenClock`
 下一事件时间推进，适合稀疏事件系统。
@@ -233,7 +238,7 @@ NetworkX 图环境。
 - `collect(ctx)` / `finalize()` / `every`
 
 #### `event_log.py` — `EventLogProbe(events)`
-记录指定类型的所有事件。
+记录指定类型的所有事件。每条记录自动包含 `event_type` 字段（事件类名字符串）。
 
 #### `snapshot.py` — `SnapshotProbe(agent_type, fields, every, sample_rate)`
 定期快照 agent 字段。
@@ -253,15 +258,37 @@ NetworkX 图环境。
 
 - `result[probe_name]` → probe 数据
 - `result.to_pandas()` / `to_polars()` / `to_dict()`
-- `result.to_csv(path)` / `to_parquet(path)` / `to_json(path)` / `to_sql(engine)`
-- `result.summary()` / `result.validate()`
+- `result.to_csv(path)` / `to_json(path)` / `to_sql(engine)`
+- `result.to_parquet(path)` — 输出 Parquet 格式（每个 probe 一个文件）
+- `result.summary()` — 打印各 probe 行数与基本统计
+- `result.validate()` — 返回 `ValidationReport`，检查数据完整性（时间戳单调性、字段缺失、行数一致性等）
+
+---
+
+### `rl/`
+
+#### `rl.py` — `GymWrapper`
+Gymnasium 兼容的强化学习接口，将 `Simulation` 封装为标准 `gym.Env`。
+
+```python
+from worldforge.rl import GymWrapper
+
+env = GymWrapper(
+    sim=sim,
+    observation=lambda ctx: np.array([...]),
+    action_space="continuous",
+    reward=lambda ctx: ctx.event_sum(PurchaseEvent, "amount", last="1 day"),
+)
+obs, info = env.reset()
+obs, reward, terminated, truncated, info = env.step(action)
+```
 
 ---
 
 ### `runner/`
 
 #### `sequential.py` — `SequentialRunner`
-单线程仿真引擎，默认运行器。
+单线程仿真引擎，默认运行器。自动将 `sim.set_environment()` 绑定的环境注入到 `ctx.environment`。
 
 #### `parallel.py` — `ParallelRunner`
 多进程运行器，用于多个独立复制。
@@ -283,6 +310,10 @@ Monte Carlo 参数扫描。
 | `market_microstructure.py` | `market_microstructure_world(...)` | 做市商、知情/噪音交易者 |
 | `social_network.py` | `social_network_world(...)` | 意见动力学、影响力传播 |
 | `iot_timeseries.py` | `iot_world(...)` | 传感器、异常、漂移 |
+| `rideshare.py` | `rideshare_world(...)` | Driver + Rider，动态 surge 定价 |
+| `game_economy.py` | `game_economy_world(...)` | 玩家经济，物品市场通胀/通缩 |
+| `org_dynamics.py` | `org_dynamics_world(...)` | 员工组织，雇用/晋升/离职 |
+| `energy_grid.py` | `energy_grid_world(...)` | 发电/消费/储能，峰值调度 |
 
 ---
 
@@ -290,10 +321,10 @@ Monte Carlo 参数扫描。
 
 ```
 tests/
-├── conftest.py               # 共享 fixtures（rng 等）
+├── conftest.py                       # 共享 fixtures（rng 等）
 ├── unit/
-│   ├── test_clock.py         ✅ 6 个测试
-│   ├── test_distributions.py ✅ 72 个测试
+│   ├── test_clock.py                 ✅ 6 个测试
+│   ├── test_distributions.py         ✅ 72 个测试
 │   ├── test_agent.py
 │   ├── test_event_queue.py
 │   ├── test_context.py
@@ -303,7 +334,10 @@ tests/
 ├── integration/
 │   ├── test_basic_sim.py
 │   ├── test_calendar_sim.py
-│   └── test_batch_runner.py
+│   ├── test_batch_runner.py
+│   ├── test_new_scenarios.py         ✅ 新增：rideshare, game_economy, org_dynamics, energy_grid 场景测试
+│   ├── test_result_extensions.py     ✅ 新增：to_parquet, validate, GymWrapper 接口测试
+│   └── test_data_integrity.py        ✅ 新增：20 个数据逻辑回归测试（覆盖 16 个已修复 Bug）
 └── benchmarks/
     ├── bench_1k_agents.py
     └── bench_100k_agents.py
@@ -322,3 +356,9 @@ tests/
 | `test_agent_removal_no_dangling_refs` | 删除 Agent 后无悬空引用 |
 | `test_event_ordering` | 事件按时间戳严格顺序处理 |
 | `test_probe_data_integrity` | Probe 行数与仿真步数严格对应 |
+
+### 测试计数汇总
+
+| 测试集 | 通过数 |
+|--------|--------|
+| 全部测试合计 | **321 passed**, 12 skipped |

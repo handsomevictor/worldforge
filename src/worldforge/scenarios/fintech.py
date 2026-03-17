@@ -94,10 +94,15 @@ def fintech_world(
     ))
     sim.add_probe(AggregatorProbe(
         metrics={
-            "total_deposits": lambda ctx: ctx.event_sum(DepositEvent, "amount"),
-            "n_loans":        lambda ctx: ctx.event_count(LoanApplicationEvent),
-            "n_defaults":     lambda ctx: ctx.event_count(DefaultEvent),
-            "avg_balance":    lambda ctx: ctx.agent_mean(BankUser, "balance"),
+            # last=30 scopes to the current 30-step window — truly "this month"
+            "deposits_this_month": lambda ctx: ctx.event_sum(DepositEvent, "amount", last=30),
+            "loans_this_month":    lambda ctx: ctx.event_count(LoanApplicationEvent, last=30),
+            "defaults_this_month": lambda ctx: ctx.event_count(DefaultEvent, last=30),
+            # Cumulative totals since simulation start
+            "total_deposits":      lambda ctx: ctx.event_sum(DepositEvent, "amount"),
+            "total_loans":         lambda ctx: ctx.event_count(LoanApplicationEvent),
+            "total_defaults":      lambda ctx: ctx.event_count(DefaultEvent),
+            "avg_balance":         lambda ctx: ctx.agent_mean(BankUser, "balance"),
         },
         every=30,
         name="monthly_metrics",

@@ -190,8 +190,18 @@ def org_dynamics_world(
         """Hire to replace attrition and maintain growth target."""
         headcount = ctx.agent_count(Employee)
         n_hire = max(0, int(headcount * hiring_rate))
+
+        def _emit_hire(emp: Any) -> None:
+            ctx.emit(HireEvent(
+                employee_id=emp.id,
+                role=emp.role,
+                department=emp.department,
+                salary=emp.salary,
+            ))
+
         for _ in range(n_hire):
-            ctx.spawn(Employee, count=1)
+            # Use init callback so HireEvent is emitted immediately after spawn
+            ctx.spawn(Employee, count=1, init=_emit_hire)
 
     sim.add_probe(EventLogProbe(
         events=[HireEvent, PromotionEvent, AttritionEvent, SalaryAdjustmentEvent],

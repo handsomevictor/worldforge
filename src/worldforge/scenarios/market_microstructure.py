@@ -105,8 +105,7 @@ def market_microstructure_world(
         name="market_metrics",
     ))
 
-    # NOTE: the runner must set sim._ctx.environment = env for env queries to work.
-    # We store env on the sim for the user to wire up manually.
-    sim._market_env = env
+    # Wire the MarketEnvironment so agents can access it via ctx.environment
+    sim.set_environment(env)
 
     return sim

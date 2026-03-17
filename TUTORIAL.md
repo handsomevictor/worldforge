@@ -15,12 +15,17 @@
 7. [数据采集（Probe）](#数据采集probe)
 8. [Simulation 主类 API](#simulation-主类-api)
 9. [仿真结果（SimulationResult）](#仿真结果simulationresult)
-10. [行为系统（Behaviors）](#行为系统behaviors)
-11. [环境系统（Environments）](#环境系统environments)
-12. [运行器（Runner）](#运行器runner)
-13. [内置场景（Scenarios）](#内置场景scenarios)
-14. [CLI 使用](#cli-使用)
-15. [常见模式](#常见模式)
+10. [数据完整性验证（result.validate()）](#数据完整性验证resultvalidate)
+11. [to_parquet() 输出](#to_parquet-输出)
+12. [行为系统（Behaviors）](#行为系统behaviors)
+13. [环境系统（Environments）](#环境系统environments)
+14. [环境注入（sim.set_environment）](#环境注入simset_environment)
+15. [运行器（Runner）](#运行器runner)
+16. [内置场景（Scenarios）](#内置场景scenarios)
+17. [强化学习接口（GymWrapper）](#强化学习接口gymwrapper)
+18. [CLI 使用](#cli-使用)
+19. [每日/周期性指标的窗口参数](#每日周期性指标的窗口参数)
+20. [常见模式](#常见模式)
 
 ---
 
@@ -89,6 +94,8 @@ tests/unit/test_time.py           30 passed
 tests/integration/test_basic_sim.py    14 passed
 tests/integration/test_scenarios.py   13 passed
 tests/benchmarks/test_performance.py   3 passed (非慢速)
+
+总计：321 passed
 ```
 
 ---
@@ -460,8 +467,13 @@ result = sim.run()
 
 records = result["event_log"]
 # records 是 list[dict]，每条记录对应一个事件
-# 每条记录包含事件的所有非下划线开头字段 + "timestamp"
-# 例：{"user_id": "1", "amount": 50.0, "timestamp": datetime(2024,1,2)}
+# 每条记录包含事件的所有非下划线开头字段 + "timestamp" + "event_type"
+# 例：{"event_type": "PurchaseEvent", "user_id": "1", "amount": 50.0, "timestamp": datetime(2024,1,2)}
+
+# 利用 event_type 字段过滤特定事件
+events = result["event_log"]
+purchases = [e for e in events if e["event_type"] == "PurchaseEvent"]
+print(f"共 {len(purchases)} 笔购买")
 ```
 
 ### SnapshotProbe
@@ -710,6 +722,52 @@ result.metadata["elapsed_seconds"]  # 1.23
 result.metadata["agent_count_final"]  # int
 result.metadata["events_total"]   # int
 ```
+
+---
+
+## 数据完整性验证（result.validate()）
+
+`result.validate()` 对所有 probe 数据执行一组完整性检查，返回一个 `ValidationReport` 对象。
+
+```python
+result = sim.run()
+report = result.validate()
+
+print(report)
+# ValidationReport(PASS, 0 warnings)
+
+if not report.passed:
+    for err in report.errors:
+        print("ERROR:", err)
+    # 示例错误: [daily_metrics] row 5: field 'gmv' is NaN
+    # 示例错误: [event_log] row 12: timestamp went backwards (5 → 3)
+
+for warning in report.warnings:
+    print("WARN:", warning)
+```
+
+检查内容：
+- 所有数值字段无 NaN / Inf
+- timestamp 列单调递增
+- dau/headcount 等计数字段非负
+
+---
+
+## to_parquet() 输出
+
+Parquet 是大规模仿真数据的推荐格式，压缩率高、列式存储，可被 pandas/polars/DuckDB/Spark 直接读取。
+
+```python
+# 将所有 probe 数据写入 Parquet 文件
+result.to_parquet("./output/")
+# 生成: ./output/event_log.parquet, ./output/daily_metrics.parquet ...
+
+# 用 pandas 读回
+import pandas as pd
+df = pd.read_parquet("./output/daily_metrics.parquet")
+```
+
+需要安装：`pip install "worldforge[pandas]"` + `pip install pyarrow`
 
 ---
 
@@ -1007,6 +1065,44 @@ recent = env.trade_history("BTC", last=100)   # 最近 100 笔
 
 ---
 
+## 环境注入（sim.set_environment）
+
+用 `set_environment()` 将环境挂载到仿真中，Runner 会自动将其绑定到 `ctx.environment`，Agent 在 `step()` 中可直接通过 `ctx.environment` 访问，无需手动传递。
+
+```python
+from worldforge.environments import NetworkEnvironment, GridEnvironment
+from worldforge import Simulation, Agent, field
+from worldforge.core.clock import DiscreteClock
+
+# 创建网络环境
+env = NetworkEnvironment.scale_free(n=1000, m=3)
+
+sim = Simulation(seed=42, clock=DiscreteClock(steps=50))
+
+# 关键：用 set_environment() 注入，Runner 会自动把它挂到 ctx.environment
+sim.set_environment(env)
+
+class NetworkAgent(Agent):
+    opinion: float = field(0.5)
+
+    def step(self, ctx):
+        env = ctx.environment   # 直接访问，无需手动传递
+        neighbors = env.neighbors(self.id)
+        if neighbors:
+            neighbor_opinions = [
+                ctx.get_agent(nid).opinion
+                for nid in neighbors
+                if ctx.get_agent(nid)
+            ]
+            if neighbor_opinions:
+                self.opinion = 0.9 * self.opinion + 0.1 * sum(neighbor_opinions) / len(neighbor_opinions)
+
+sim.add_agents(NetworkAgent, count=1000)
+result = sim.run()
+```
+
+---
+
 ## 运行器（Runner）
 
 ### SequentialRunner（内置于 sim.run()）
@@ -1081,6 +1177,10 @@ from worldforge.scenarios import (
     iot_world,                # IoT 传感器时序
     supply_chain_world,       # 供应链库存
     social_network_world,     # 舆论动力学
+    rideshare_world,          # 网约车平台
+    game_economy_world,       # 游戏虚拟经济
+    org_dynamics_world,       # 员工组织动态
+    energy_grid_world,        # 电力系统
 )
 ```
 
@@ -1133,6 +1233,119 @@ n_anomalies = sum(1 for r in result["sensor_readings"] if r["is_anomaly"])
 print(f"Anomalies detected: {n_anomalies}")
 ```
 
+### rideshare_world — 网约车平台
+
+```python
+from worldforge.scenarios import rideshare_world
+
+sim = rideshare_world(
+    n_drivers=200,    # 司机数量
+    n_riders=1000,    # 乘客数量
+    steps=200,        # 每步约5分钟
+    seed=42,
+)
+result = sim.run()
+df = result.to_pandas()["platform_metrics"]
+# 包含列: rides_completed, rides_cancelled, gmv, idle_drivers, waiting_riders, surge_multiplier
+print(df[["rides_completed", "gmv", "surge_multiplier"]].head())
+```
+
+**预期行为：** `surge_multiplier >= 1.0`，`gmv >= 0`，`rides_completed + rides_cancelled <= 总出行请求数`
+
+### game_economy_world — 游戏虚拟经济
+
+```python
+from worldforge.scenarios import game_economy_world
+
+sim = game_economy_world(
+    n_players=2000,
+    steps=365,         # 每步代表一天
+    seed=42,
+    initial_prices={"sword": 150.0},  # 可自定义初始物价
+)
+result = sim.run()
+df = result.to_pandas()["economy_metrics"]
+# 包含列: dau, iap_revenue, level_ups, churns, avg_level, avg_gold, sword_price, potion_price
+```
+
+**预期行为：** `sword_price` 会随时间通胀/通缩，不单调；DAU 随流失逐渐下降
+
+### org_dynamics_world — 员工组织动态
+
+```python
+from worldforge.scenarios import org_dynamics_world
+
+sim = org_dynamics_world(
+    n_employees=500,
+    steps=60,           # 月份数
+    hiring_rate=0.03,   # 每月招聘比例
+    seed=42,
+)
+result = sim.run()
+df = result.to_pandas()["org_metrics"]
+# 包含列: headcount, avg_salary, avg_performance, avg_engagement, avg_level, attritions, promotions
+events = result.to_pandas()["event_log"]
+# event_type 列包含: HireEvent, PromotionEvent, AttritionEvent, SalaryAdjustmentEvent
+```
+
+### energy_grid_world — 电力系统
+
+```python
+from worldforge.scenarios import energy_grid_world
+
+sim = energy_grid_world(
+    n_generators=20,
+    n_consumers=100,
+    n_storage=5,
+    steps=168,         # 每步代表一小时，168步=1周
+    seed=42,
+)
+result = sim.run()
+ts = result.to_pandas()["grid_timeseries"]
+# 包含列: total_supply_mw, total_demand_mw, storage_level_mwh, online_generators
+```
+
+**预期行为：** 夜间时段（步骤 0-5、19-23）太阳能发电量为 0；`storage_level_mwh >= 0` 始终成立
+
+---
+
+## 强化学习接口（GymWrapper）
+
+worldforge 提供符合 Gymnasium 标准的 RL 环境接口，可将任意仿真包装为可训练的强化学习环境。
+
+```python
+from worldforge.rl import GymWrapper
+from worldforge.scenarios import epidemic_world
+import numpy as np
+
+sim = epidemic_world(population=1000, duration_days=100, seed=42)
+
+env = GymWrapper(
+    sim=sim,
+    # 观测：当前感染比例
+    observation=lambda ctx: np.array([
+        sum(1 for p in ctx.agents() if getattr(p, "state", "S") == "I") / 1000.0,
+    ]),
+    # 奖励：康复人数（越多越好）
+    reward=lambda ctx: float(
+        sum(1 for p in ctx.agents() if getattr(p, "state", "R") == "R")
+    ),
+    # 动作函数：可以用来控制隔离政策等（这里是 no-op）
+    action_fn=lambda action, ctx: None,
+    max_steps=100,
+)
+
+# 标准 Gymnasium 接口
+obs, info = env.reset(seed=42)
+for _ in range(100):
+    action = 0   # 你的 RL agent 在这里做决策
+    obs, reward, terminated, truncated, info = env.step(action)
+    if terminated or truncated:
+        break
+```
+
+**预期行为：** `obs.shape == (1,)`；`reward` 是 float；当仿真步数耗尽时 `terminated=True`
+
 ---
 
 ## CLI 使用
@@ -1154,6 +1367,30 @@ worldforge run epidemic --n-agents 5000 --steps 90 --output ./results/
 
 # 查看环境信息（版本、已安装的可选依赖）
 worldforge info
+```
+
+---
+
+## 每日/周期性指标的窗口参数
+
+在 `AggregatorProbe` 和 `TimeSeriesProbe` 的 lambda 中，`ctx.event_sum` / `ctx.event_count` 默认统计**从仿真开始到当前**的累计值。若要统计"最近一段时间"的窗口值，需使用 `last` 参数。
+
+```python
+# 错误：这是从仿真开始到现在的累计总和，不是"今日" GMV
+"gmv_daily": lambda ctx: ctx.event_sum(PurchaseEvent, "amount"),
+
+# 正确：只统计最近 1 天的事件
+"gmv_daily": lambda ctx: ctx.event_sum(PurchaseEvent, "amount", last="1 day"),
+
+# 也支持整数步数（DiscreteClock）
+"gmv_last_week": lambda ctx: ctx.event_sum(PurchaseEvent, "amount", last=7),
+
+# 也支持 timedelta
+from datetime import timedelta
+"gmv_last_week": lambda ctx: ctx.event_sum(PurchaseEvent, "amount", last=timedelta(days=7)),
+
+# 同时保留累计值
+"gmv_cumulative": lambda ctx: ctx.event_sum(PurchaseEvent, "amount"),
 ```
 
 ---

@@ -48,6 +48,10 @@ class SimContext:
         # Managed by Simulation; context just stores them for the runner to call.
         self._global_rules: list[tuple[Callable, Any]] = []  # (fn, interval)
 
+        # Optional environment (NetworkEnvironment, GridEnvironment, MarketEnvironment, etc.)
+        # Set by SequentialRunner if sim.set_environment() was called.
+        self.environment: Any = None
+
     # -------------------------------------------------------------------
     # Time
     # -------------------------------------------------------------------

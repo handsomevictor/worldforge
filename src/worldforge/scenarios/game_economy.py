@@ -47,13 +47,17 @@ class MarketListingEvent(Event):
 # Global market prices (mutable, updated by global_rule)
 # ---------------------------------------------------------------------------
 
-_market_prices: dict[str, float] = {
+_MARKET_PRICES_DEFAULTS: dict[str, float] = {
     "sword":   100.0,
     "shield":  80.0,
     "potion":  20.0,
     "armor":   150.0,
     "gem":     500.0,
 }
+
+# Module-level dict used by Player.step(); reset to defaults at the start
+# of each game_economy_world() call so sequential runs don't pollute each other.
+_market_prices: dict[str, float] = dict(_MARKET_PRICES_DEFAULTS)
 
 _ITEM_TYPES = list(_market_prices.keys())
 
@@ -175,6 +179,8 @@ def game_economy_world(
     >>> df = result.to_pandas()["economy_metrics"]
     """
     global _market_prices
+    # Reset to canonical defaults at every call — prevents cross-run contamination
+    _market_prices = dict(_MARKET_PRICES_DEFAULTS)
     if initial_prices:
         _market_prices.update(initial_prices)
 
@@ -191,9 +197,9 @@ def game_economy_world(
         recent_purchases = [
             e for e in ctx._event_log
             if isinstance(e, ItemPurchaseEvent) and not e.is_real_money
-        ]
+        ][-200:]    # last 200 in-game purchases (look-back window)
         purchase_counts: dict[str, int] = {}
-        for e in recent_purchases[-200:]:   # last 200 in-game purchases
+        for e in recent_purchases:
             purchase_counts[e.item_type] = purchase_counts.get(e.item_type, 0) + 1
 
         for item, price in _market_prices.items():

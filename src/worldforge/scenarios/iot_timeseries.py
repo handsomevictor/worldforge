@@ -87,7 +87,17 @@ def iot_world(
     ))
     sim.add_probe(TimeSeriesProbe(
         series={
-            "n_anomalies": lambda ctx: ctx.event_count(SensorReading),
+            # Count only anomalous readings, not all readings
+            "n_anomalies": lambda ctx: sum(
+                1 for e in ctx._event_log
+                if isinstance(e, SensorReading) and e.is_anomaly
+            ),
+            "n_readings_total": lambda ctx: ctx.event_count(SensorReading),
+            "anomaly_rate": lambda ctx: (
+                sum(1 for e in ctx._event_log
+                    if isinstance(e, SensorReading) and e.is_anomaly)
+                / max(ctx.event_count(SensorReading), 1)
+            ),
         },
         every=60,
         name="hourly_summary",

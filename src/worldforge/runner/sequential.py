@@ -41,6 +41,10 @@ class SequentialRunner:
         rng = np.random.default_rng(sim.seed)
         ctx = SimContext(clock=clock, rng=rng)
 
+        # Wire environment if one was registered via sim.set_environment()
+        if sim._environment is not None:
+            ctx.environment = sim._environment
+
         # Register event handlers
         for event_type, handler in sim._event_handlers:
             ctx.register_event_handler(event_type, handler)

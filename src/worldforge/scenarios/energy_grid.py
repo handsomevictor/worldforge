@@ -239,16 +239,23 @@ def energy_grid_world(
 
         else:
             # Deficit: discharge batteries
+            # Apply round-trip efficiency on discharge (symmetric with charge).
+            # Energy delivered to grid = discharge_stored * efficiency.
             deficit = abs(net)
             for bat in storage_units:
                 if bat.charge_level_mwh > 0 and deficit > 0:
-                    discharge = min(bat.charge_rate_mw, deficit, bat.charge_level_mwh)
-                    bat.charge_level_mwh -= discharge
-                    deficit -= discharge
+                    # How much stored energy do we need to dispatch `deficit` MW?
+                    # grid_out = stored_out * efficiency  →  stored_out = deficit / efficiency
+                    stored_needed = deficit / bat.efficiency
+                    stored_out = min(bat.charge_rate_mw / bat.efficiency, stored_needed,
+                                     bat.charge_level_mwh)
+                    grid_out = stored_out * bat.efficiency
+                    bat.charge_level_mwh -= stored_out
+                    deficit -= grid_out
                     ctx.emit(StorageChargeEvent(
                         storage_id=bat.id,
                         action="discharge",
-                        energy_mwh=discharge,
+                        energy_mwh=grid_out,   # report energy delivered to grid
                     ))
 
             # If still a deficit, load shedding

@@ -51,6 +51,9 @@ class Simulation:
         # Global rules: [(fn, every), ...]
         self._global_rules: list[tuple[Callable, Any]] = []
 
+        # Optional environment (set via set_environment())
+        self._environment: Any = None
+
     # -------------------------------------------------------------------
     # Building the simulation
     # -------------------------------------------------------------------
@@ -83,6 +86,20 @@ class Simulation:
     def add_shock(self, shock: Any) -> "Simulation":
         """Register an ExternalShock."""
         self._shocks.append(shock)
+        return self
+
+    def set_environment(self, env: Any) -> "Simulation":
+        """
+        Attach an environment (NetworkEnvironment, GridEnvironment, MarketEnvironment, etc.).
+
+        The environment is made available to agents via ``ctx.environment`` during the run.
+
+        Usage::
+
+            env = MarketEnvironment(assets=["STOCK"], initial_prices={"STOCK": 100})
+            sim.set_environment(env)
+        """
+        self._environment = env
         return self
 
     def on(self, event_type: type) -> Callable:
